@@ -12,10 +12,13 @@ class StatusBarController: NSObject {
     private var animationFrame = 0
     private var animationFrames: [NSImage] = []
     private var downloadProgress: String?
+    private var downloadPercent: Double = 0
     private var copiedFeedback = false
     private var menuItemTargets: [MenuItemTarget] = []
+    private var stateMenuItem: NSMenuItem?
 
     var reprocessHandler: ((URL) -> Void)?
+    var onConfigChange: ((Config) -> Void)?
 
     enum State {
         case idle
@@ -56,9 +59,19 @@ class StatusBarController: NSObject {
         }
     }
 
-    func updateDownloadProgress(_ text: String?) {
+    func updateDownloadProgress(_ text: String?, percent: Double = 0) {
         downloadProgress = text
-        buildMenu()
+        downloadPercent = percent
+        if state == .downloading {
+            setIcon(StatusBarController.drawDownloadProgress(downloadPercent))
+        }
+        if let text = text, let item = stateMenuItem {
+            let config = Config.load()
+            let hotkeyDesc = KeyCodes.describe(keyCode: config.hotkey.keyCode, modifiers: config.hotkey.modifiers)
+            item.title = "\(text) (hotkey: \(hotkeyDesc))"
+        } else {
+            buildMenu()
+        }
     }
 
     private static let displayDateFormatter: DateFormatter = {
@@ -82,35 +95,143 @@ class StatusBarController: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
+        let stateLabel: String
         if let progress = downloadProgress {
-            let dlItem = NSMenuItem(title: progress, action: nil, keyEquivalent: "")
-            dlItem.isEnabled = false
-            menu.addItem(dlItem)
-            menu.addItem(NSMenuItem.separator())
+            stateLabel = progress
+        } else {
+            switch state {
+            case .idle: stateLabel = "Ready"
+            case .recording: stateLabel = "Recording..."
+            case .transcribing: stateLabel = "Transcribing..."
+            case .downloading: stateLabel = "Downloading model..."
+            case .waitingForPermission: stateLabel = "Waiting for Accessibility permission..."
+            case .copiedToClipboard: stateLabel = "Copied to clipboard"
+            }
         }
-
-        let stateText: String
-        switch state {
-        case .idle: stateText = "Ready"
-        case .recording: stateText = "Recording..."
-        case .transcribing: stateText = "Transcribing..."
-        case .downloading: stateText = "Downloading model..."
-        case .waitingForPermission: stateText = "Waiting for Accessibility permission..."
-        case .copiedToClipboard: stateText = "Copied to clipboard"
+        if state == .waitingForPermission {
+            let target = MenuItemTarget {
+                Permissions.openAccessibilitySettings()
+            }
+            menuItemTargets.append(target)
+            let stateItem = NSMenuItem(title: "Grant Accessibility Permission...", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+            stateItem.target = target
+            menu.addItem(stateItem)
+            stateMenuItem = stateItem
+        } else {
+            let stateItem = NSMenuItem(title: "\(stateLabel) (hotkey: \(hotkeyDesc))", action: nil, keyEquivalent: "")
+            stateItem.isEnabled = false
+            menu.addItem(stateItem)
+            stateMenuItem = stateItem
         }
-        let stateItem = NSMenuItem(title: stateText, action: nil, keyEquivalent: "")
-        stateItem.isEnabled = false
-        menu.addItem(stateItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        let hotkeyItem = NSMenuItem(title: "Hotkey: \(hotkeyDesc)", action: nil, keyEquivalent: "")
-        hotkeyItem.isEnabled = false
-        menu.addItem(hotkeyItem)
+        let currentLang = config.language
+        let langName = Config.supportedLanguages.first(where: { $0.code == currentLang })?.name ?? currentLang
+        let langItem = NSMenuItem(title: "Language: \(langName)", action: nil, keyEquivalent: "")
+        let langSubmenu = NSMenu()
+
+        for (index, lang) in Config.supportedLanguages.enumerated() {
+            if index == 1 {
+                langSubmenu.addItem(NSMenuItem.separator())
+            }
+            let target = MenuItemTarget { [weak self] in
+                var cfg = Config.load()
+                cfg.language = lang.code
+                if lang.code != "en" && cfg.modelSize.hasSuffix(".en") {
+                    let base = String(cfg.modelSize.dropLast(3))
+                    if Config.supportedModels.contains(base) {
+                        cfg.modelSize = base
+                    }
+                } else if lang.code == "en" && !cfg.modelSize.hasSuffix(".en") {
+                    let enVariant = cfg.modelSize + ".en"
+                    if Config.supportedModels.contains(enVariant) {
+                        cfg.modelSize = enVariant
+                    }
+                }
+                try? cfg.save()
+                self?.onConfigChange?(cfg)
+            }
+            self.menuItemTargets.append(target)
+            let item = NSMenuItem(title: lang.name, action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+            item.target = target
+            if lang.code == currentLang {
+                item.state = .on
+            }
+            langSubmenu.addItem(item)
+        }
+
+        langItem.submenu = langSubmenu
+        menu.addItem(langItem)
 
         let modelItem = NSMenuItem(title: "Model: \(config.modelSize)", action: nil, keyEquivalent: "")
-        modelItem.isEnabled = false
+        let modelSubmenu = NSMenu()
+
+        let englishModels = Config.supportedModels.filter { $0.hasSuffix(".en") }
+        let multilingualModels = Config.supportedModels.filter { !$0.hasSuffix(".en") }
+
+        let engHeader = NSMenuItem(title: "English", action: nil, keyEquivalent: "")
+        engHeader.isEnabled = false
+        modelSubmenu.addItem(engHeader)
+
+        for model in englishModels {
+            let target = MenuItemTarget { [weak self] in
+                var cfg = Config.load()
+                cfg.modelSize = model
+                if cfg.language != "en" {
+                    cfg.language = "en"
+                }
+                try? cfg.save()
+                self?.onConfigChange?(cfg)
+            }
+            self.menuItemTargets.append(target)
+            let item = NSMenuItem(title: "  \(model)", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+            item.target = target
+            if model == config.modelSize {
+                item.state = .on
+            }
+            modelSubmenu.addItem(item)
+        }
+
+        modelSubmenu.addItem(NSMenuItem.separator())
+
+        let multiHeader = NSMenuItem(title: "Multilingual", action: nil, keyEquivalent: "")
+        multiHeader.isEnabled = false
+        modelSubmenu.addItem(multiHeader)
+
+        for model in multilingualModels {
+            let target = MenuItemTarget { [weak self] in
+                var cfg = Config.load()
+                cfg.modelSize = model
+                try? cfg.save()
+                self?.onConfigChange?(cfg)
+            }
+            self.menuItemTargets.append(target)
+            let item = NSMenuItem(title: "  \(model)", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+            item.target = target
+            if model == config.modelSize {
+                item.state = .on
+            }
+            modelSubmenu.addItem(item)
+        }
+
+        modelItem.submenu = modelSubmenu
         menu.addItem(modelItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let toggleTarget = MenuItemTarget { [weak self] in
+            var cfg = Config.load()
+            let current = cfg.toggleMode?.value ?? false
+            cfg.toggleMode = FlexBool(!current)
+            try? cfg.save()
+            self?.onConfigChange?(cfg)
+        }
+        menuItemTargets.append(toggleTarget)
+        let toggleItem = NSMenuItem(title: "Toggle Mode", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+        toggleItem.target = toggleTarget
+        toggleItem.state = (config.toggleMode?.value ?? false) ? .on : .off
+        menu.addItem(toggleItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -298,16 +419,32 @@ class StatusBarController: NSObject {
         }
     }
 
-    // MARK: - Downloading animation: arrow moves down
+    // MARK: - Downloading: progress ring
+
+    private static let downloadPulseFrameCount = 30
+
+    private static func prerenderDownloadPulseFrames() -> [NSImage] {
+        let count = downloadPulseFrameCount
+        return (0..<count).map { frame in
+            let t = Double(frame) / Double(count)
+            let alpha = CGFloat(0.4 + 0.6 * (sin(t * 2.0 * .pi) + 1.0) / 2.0)
+            return drawDownloadProgress(0, pulseAlpha: alpha)
+        }
+    }
 
     private func startDownloadingAnimation() {
         animationFrame = 0
-        setIcon(StatusBarController.drawDownloadingFrame(0))
+        animationFrames = StatusBarController.prerenderDownloadPulseFrames()
+        setIcon(animationFrames[0])
 
-        animationTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        animationTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            self.animationFrame = (self.animationFrame + 1) % 3
-            self.setIcon(StatusBarController.drawDownloadingFrame(self.animationFrame))
+            if self.downloadPercent > 0 {
+                self.setIcon(StatusBarController.drawDownloadProgress(self.downloadPercent))
+            } else {
+                self.animationFrame = (self.animationFrame + 1) % StatusBarController.downloadPulseFrameCount
+                self.setIcon(self.animationFrames[self.animationFrame])
+            }
         }
     }
 
@@ -355,33 +492,43 @@ class StatusBarController: NSObject {
         return image
     }
 
-    static func drawDownloadingFrame(_ frame: Int) -> NSImage {
+    static func drawDownloadProgress(_ percent: Double, pulseAlpha: CGFloat = 1.0) -> NSImage {
         let size = NSSize(width: 18, height: 18)
         let image = NSImage(size: size, flipped: false) { rect in
-            NSColor.black.setStroke()
-            NSColor.black.setFill()
+            let center = NSPoint(x: rect.midX, y: rect.midY)
+            let radius: CGFloat = 6.5
+            let lineWidth: CGFloat = 1.8
 
-            let centerX = rect.midX
+            NSColor.black.withAlphaComponent(0.25 * pulseAlpha).setStroke()
+            let bgCircle = NSBezierPath()
+            bgCircle.appendArc(withCenter: center, radius: radius, startAngle: 0, endAngle: 360)
+            bgCircle.lineWidth = lineWidth
+            bgCircle.stroke()
 
-            let basePath = NSBezierPath()
-            basePath.move(to: NSPoint(x: centerX - 5, y: 3))
-            basePath.line(to: NSPoint(x: centerX + 5, y: 3))
-            basePath.lineWidth = 1.5
-            basePath.lineCapStyle = .round
-            basePath.stroke()
+            if percent > 0 {
+                NSColor.black.setStroke()
+                let progressArc = NSBezierPath()
+                let startAngle: CGFloat = 90
+                let endAngle = startAngle - CGFloat(percent / 100.0) * 360.0
+                progressArc.appendArc(withCenter: center, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
+                progressArc.lineWidth = lineWidth
+                progressArc.lineCapStyle = .round
+                progressArc.stroke()
+            }
 
-            let arrowY: CGFloat = 14 - CGFloat(frame) * 2
+            NSColor.black.withAlphaComponent(pulseAlpha).setStroke()
+            NSColor.black.withAlphaComponent(pulseAlpha).setFill()
             let arrowPath = NSBezierPath()
-            arrowPath.move(to: NSPoint(x: centerX, y: arrowY))
-            arrowPath.line(to: NSPoint(x: centerX, y: 6))
+            arrowPath.move(to: NSPoint(x: center.x, y: center.y + 3))
+            arrowPath.line(to: NSPoint(x: center.x, y: center.y - 3))
             arrowPath.lineWidth = 1.5
             arrowPath.lineCapStyle = .round
             arrowPath.stroke()
 
             let headPath = NSBezierPath()
-            headPath.move(to: NSPoint(x: centerX - 3, y: 9))
-            headPath.line(to: NSPoint(x: centerX, y: 5))
-            headPath.line(to: NSPoint(x: centerX + 3, y: 9))
+            headPath.move(to: NSPoint(x: center.x - 2.5, y: center.y - 0.5))
+            headPath.line(to: NSPoint(x: center.x, y: center.y - 3.5))
+            headPath.line(to: NSPoint(x: center.x + 2.5, y: center.y - 0.5))
             headPath.lineWidth = 1.5
             headPath.lineCapStyle = .round
             headPath.lineJoinStyle = .round

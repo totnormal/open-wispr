@@ -41,6 +41,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             self.statusBar.reprocessHandler = { [weak self] url in
                 self?.reprocess(audioURL: url)
             }
+            self.statusBar.onConfigChange = { [weak self] newConfig in
+                self?.applyConfigChange(newConfig)
+            }
             self.statusBar.buildMenu()
         }
 
@@ -82,7 +85,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 self.statusBar.updateDownloadProgress("Downloading \(self.config.modelSize) model...")
             }
             print("Downloading \(config.modelSize) model...")
-            try ModelDownloader.download(modelSize: config.modelSize)
+            try ModelDownloader.download(modelSize: config.modelSize) { [weak self] percent in
+                DispatchQueue.main.async {
+                    let pct = Int(percent)
+                    self?.statusBar.updateDownloadProgress("Downloading \(self?.config.modelSize ?? "") model... \(pct)%", percent: percent)
+                }
+            }
             DispatchQueue.main.async {
                 self.statusBar.updateDownloadProgress(nil)
             }
@@ -120,7 +128,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func reloadConfig() {
-        config = Config.load()
+        let newConfig = Config.load()
+        applyConfigChange(newConfig)
+    }
+
+    func applyConfigChange(_ newConfig: Config) {
+        guard isReady else { return }
+        let wasDownloading = statusBar.state == .downloading
+        config = newConfig
         transcriber = Transcriber(modelSize: config.modelSize, language: config.language)
         transcriber.spokenPunctuation = config.spokenPunctuation?.value ?? false
 
@@ -134,9 +149,35 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             onKeyUp: { [weak self] in self?.handleKeyUp() }
         )
 
+        if !wasDownloading && !Transcriber.modelExists(modelSize: config.modelSize) {
+            statusBar.state = .downloading
+            statusBar.updateDownloadProgress("Downloading \(config.modelSize) model...")
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                do {
+                    try ModelDownloader.download(modelSize: newConfig.modelSize) { percent in
+                        DispatchQueue.main.async {
+                            let pct = Int(percent)
+                            self?.statusBar.updateDownloadProgress("Downloading \(newConfig.modelSize) model... \(pct)%", percent: percent)
+                        }
+                    }
+                    DispatchQueue.main.async {
+                        self?.statusBar.state = .idle
+                        self?.statusBar.updateDownloadProgress(nil)
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        print("Error downloading model: \(error.localizedDescription)")
+                        self?.statusBar.state = .idle
+                        self?.statusBar.updateDownloadProgress(nil)
+                    }
+                }
+            }
+        }
+
         statusBar.buildMenu()
+
         let hotkeyDesc = KeyCodes.describe(keyCode: config.hotkey.keyCode, modifiers: config.hotkey.modifiers)
-        print("Config reloaded: hotkey=\(hotkeyDesc) model=\(config.modelSize)")
+        print("Config updated: lang=\(config.language) model=\(config.modelSize) hotkey=\(hotkeyDesc)")
     }
 
     private func handleKeyDown() {
