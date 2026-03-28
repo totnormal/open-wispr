@@ -14,7 +14,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     public func applicationDidFinishLaunching(_ notification: Notification) {
         statusBar = StatusBarController()
         recorder = AudioRecorder()
-        inserter = TextInserter()
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.setup()
@@ -31,6 +30,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupInner() throws {
         config = Config.load()
+        inserter = TextInserter(inputMethod: config.inputMethod)
         if Config.effectiveMaxRecordings(config.maxRecordings) == 0 {
             RecordingStore.deleteAllRecordings()
         }
@@ -137,6 +137,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         print("open-wispr v\(OpenWispr.version)")
         print("Hotkey: \(hotkeyDesc)")
         print("Model: \(config.modelSize)")
+        print("Input method: \(inserter.resolvedInputMethod)")
         print("Ready.")
     }
 
@@ -152,6 +153,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         config = newConfig
         transcriber = Transcriber(modelSize: config.modelSize, language: config.language)
         transcriber.spokenPunctuation = config.spokenPunctuation?.value ?? false
+        inserter = TextInserter(inputMethod: config.inputMethod)
 
         hotkeyManager?.stop()
         hotkeyManager = HotkeyManager(
