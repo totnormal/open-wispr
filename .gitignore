@@ -8,3 +8,4 @@
 .playwright-mcp/
 .vscode/
 docs/superpowers/
+.worktrees/
