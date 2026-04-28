@@ -5,7 +5,6 @@
 <h1 align="center">open-wispr</h1>
 
 <p align="center">
-  <strong><a href="https://open-wispr.com">open-wispr.com</a></strong><br>
   Local, private voice dictation for macOS. Hold a key, speak, release — your words appear at the cursor.<br>
   Everything runs on-device. No audio or text ever leaves your machine.
 </p>
@@ -25,15 +24,7 @@
 
 Clones the repo, installs whisper-cpp via Homebrew, builds from source, downloads `base.en` (or your chosen model), sets up auto-start on login, and starts dictating. Everything is automatic.
 
-### Option B: Homebrew (original upstream)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/human37/open-wispr/main/scripts/install.sh | bash
-```
-
-> Note: The upstream Homebrew formula does not include the proofreading pipeline. Use Option A for filler removal, automatic punctuation, sentence capitalization, and model auto-cleanup.
-
-### Option C: Portable DMG
+### Option B: Portable DMG (for sharing)
 
 ```bash
 git clone https://github.com/totnormal/open-wispr.git
@@ -47,14 +38,6 @@ Produces `open-wispr-v0.37.0.dmg` — drag OpenWispr.app to /Applications like a
 After any install: a waveform icon appears in your menu bar. The default hotkey is the **Globe key** (🌐). Hold it, speak, release.
 
 > **[Full installation guide](docs/install-guide.md)** — permissions walkthrough with screenshots, non-English macOS instructions, and troubleshooting.
-
-## Uninstall
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/human37/open-wispr/main/scripts/uninstall.sh | bash
-```
-
-This stops the service, removes the formula, tap, config, models, app bundle, logs, and permissions.
 
 ## Configuration
 
@@ -71,8 +54,6 @@ Edit `~/.config/open-wispr/config.json`:
   "toggleMode": false
 }
 ```
-
-Then restart: `brew services restart open-wispr`
 
 | Option | Default | Values |
 |---|---|---|
@@ -118,24 +99,9 @@ Click the waveform icon for status and options. **Recent Recordings** lists your
 
 Click the menu bar icon to access **Copy Last Dictation** — recovers your most recent transcription if you dictated without a text field focused.
 
-## Compare
-
-| | open-wispr | VoiceInk | Wispr Flow | Superwhisper | Apple Dictation |
-|---|---|---|---|---|---|
-| **Price** | **Free** | $39.99 | $15/mo | $8.49/mo | Free |
-| **Open source** | MIT | GPLv3 | No | No | No |
-| **100% on-device** | Yes | Yes | No | Yes | Partial |
-| **Push-to-talk** | Yes | Yes | Yes | Yes | No |
-| **AI features** | No | AI assistant | AI rewriting | AI formatting | No |
-| **Account required** | No | No | Yes | Yes | Apple ID |
-
 ## Privacy
 
 open-wispr is completely local. Audio is recorded to a temp file, transcribed by whisper.cpp on your CPU/GPU, and the temp file is deleted. No network requests are made except to download the Whisper model on first run. Optionally, you can configure open-wispr to store a number of past recordings locally via the `maxRecordings` setting. Those recordings stay private and on your machine, and we default to not storing anything.
-
-## Roadmap
-
-See what's planned and in progress on the [public roadmap](https://github.com/users/human37/projects/2). Feature requests and ideas are welcome as [issues](https://github.com/human37/open-wispr/issues).
 
 ## Features
 
@@ -170,10 +136,6 @@ swift build -c release
 bash scripts/bundle-app.sh .build/release/open-wispr OpenWispr.app dev
 open OpenWispr.app
 ```
-
-## Support
-
-open-wispr is free and always will be. If you find it useful, you can [leave a tip](https://buy.stripe.com/4gM5kC2AU0Ssd4l6Hqd7q00).
 
 ## License
 

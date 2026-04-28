@@ -29,16 +29,6 @@ This fork adds a **proofreading pipeline** — post-ASR correction that runs ful
 - Runs as a background Homebrew service
 - No GUI, no menubar icon, no overhead
 
-## Comparison to Alternatives
-
-| Feature | open-wispr | Wispr Flow | Superwhisper | MacWhisper |
-|---|---|---|---|---|
-| Price | Free | $15/mo | $8.49/mo | $69 |
-| Open Source | Yes | No | No | No |
-| 100% Local | Yes | Yes | Yes | Yes |
-| Works in Any App | Yes | Yes | Yes | No (copy/paste) |
-| Install Method | Homebrew | DMG | DMG | App Store |
-
 ## Configuration
 
 ```json
