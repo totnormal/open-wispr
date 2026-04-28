@@ -111,6 +111,13 @@ public class Transcriber {
     }
 
     public static func findWhisperBinary() -> String? {
+        // Check bundled binary first (self-contained DMG)
+        if let bundlePath = Bundle.main.executablePath {
+            let bundledDir = (bundlePath as NSString).deletingLastPathComponent
+            let bundled = "\(bundledDir)/whisper-cli"
+            if FileManager.default.fileExists(atPath: bundled) { return bundled }
+        }
+
         let candidates = [
             "/opt/homebrew/bin/whisper-cli",
             "/usr/local/bin/whisper-cli",
