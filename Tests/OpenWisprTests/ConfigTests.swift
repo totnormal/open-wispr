@@ -88,6 +88,46 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(Config.effectiveMaxRecordings(config.maxRecordings), 0)
     }
 
+    func testConfigDefaultsMissingProofreadingModeToStandard() throws {
+        let json = """
+        {
+            "hotkey": {"keyCode": 63, "modifiers": []},
+            "modelSize": "small.en",
+            "language": "en"
+        }
+        """.data(using: .utf8)!
+        let config = try Config.decode(from: json)
+        XCTAssertEqual(config.proofreadingMode ?? .standard, .standard)
+    }
+
+    func testConfigDecodesExplicitProofreadingMode() throws {
+        let json = """
+        {
+            "hotkey": {"keyCode": 63, "modifiers": []},
+            "modelSize": "small.en",
+            "language": "en",
+            "proofreadingMode": "minimal"
+        }
+        """.data(using: .utf8)!
+        let config = try Config.decode(from: json)
+        XCTAssertEqual(config.proofreadingMode, .minimal)
+    }
+
+    func testConfigDecodesLegacySpokenPunctuationOnlyConfig() throws {
+        let json = """
+        {
+            "hotkey": {"keyCode": 63, "modifiers": []},
+            "modelSize": "small.en",
+            "language": "en",
+            "spokenPunctuation": true
+        }
+        """.data(using: .utf8)!
+        let config = try Config.decode(from: json)
+        XCTAssertEqual(config.spokenPunctuation?.value, true)
+        XCTAssertNil(config.proofreadingMode)
+        XCTAssertEqual(config.proofreadingMode ?? .standard, .standard)
+    }
+
     // MARK: - toggleMode decoding
 
     func testConfigDecodesToggleModeTrue() throws {

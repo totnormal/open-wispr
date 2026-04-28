@@ -281,6 +281,29 @@ class StatusBarController: NSObject {
         toggleItem.state = (config.toggleMode?.value ?? false) ? .on : .off
         menu.addItem(toggleItem)
 
+        let proofreadingItem = NSMenuItem(title: "Proofreading", action: nil, keyEquivalent: "")
+        let proofreadingSubmenu = NSMenu()
+        let currentProofreadingMode = config.proofreadingMode ?? .standard
+
+        for mode in ProofreadingMode.allCases {
+            let target = MenuItemTarget { [weak self] in
+                var cfg = Config.load()
+                cfg.proofreadingMode = mode
+                try? cfg.save()
+                self?.onConfigChange?(cfg)
+            }
+            menuItemTargets.append(target)
+            let item = NSMenuItem(title: mode.displayName, action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+            item.target = target
+            if mode == currentProofreadingMode {
+                item.state = .on
+            }
+            proofreadingSubmenu.addItem(item)
+        }
+
+        proofreadingItem.submenu = proofreadingSubmenu
+        menu.addItem(proofreadingItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let lastText = (NSApplication.shared.delegate as? AppDelegate)?.lastTranscription

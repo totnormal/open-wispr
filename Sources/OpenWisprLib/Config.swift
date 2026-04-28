@@ -5,12 +5,27 @@ public struct LanguageOption: Equatable, Sendable {
     public let name: String
 }
 
+public enum ProofreadingMode: String, Codable, CaseIterable {
+    case minimal  = "minimal"
+    case standard = "standard"
+
+    public var displayName: String {
+        switch self {
+        case .minimal:
+            return "Minimal"
+        case .standard:
+            return "Standard"
+        }
+    }
+}
+
 public struct Config: Codable {
     public var hotkey: HotkeyConfig
     public var modelPath: String?
     public var modelSize: String
     public var language: String
     public var spokenPunctuation: FlexBool?
+    public var proofreadingMode: ProofreadingMode?
     public var maxRecordings: Int?
     public var toggleMode: FlexBool?
     public var audioInputDeviceID: UInt32?
@@ -157,6 +172,7 @@ public struct Config: Codable {
         modelSize: "base.en",
         language: "en",
         spokenPunctuation: FlexBool(false),
+        proofreadingMode: .standard,
         maxRecordings: nil,
         toggleMode: FlexBool(false)
     )

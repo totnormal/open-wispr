@@ -36,7 +36,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             RecordingStore.deleteAllRecordings()
         }
         transcriber = Transcriber(modelSize: config.modelSize, language: config.language)
-        transcriber.spokenPunctuation = config.spokenPunctuation?.value ?? false
 
         DispatchQueue.main.async {
             self.statusBar.reprocessHandler = { [weak self] url in
@@ -159,7 +158,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             recorder.reload()
         }
         transcriber = Transcriber(modelSize: config.modelSize, language: config.language)
-        transcriber.spokenPunctuation = config.spokenPunctuation?.value ?? false
         inserter = TextInserter()
 
         hotkeyManager?.stop()
@@ -266,15 +264,20 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             do {
-                let raw = try self.transcriber.transcribe(audioURL: audioURL)
-                let text = (self.config.spokenPunctuation?.value ?? false) ? TextPostProcessor.process(raw) : raw
+                let raw = try self.transcriber.transcribe(audioURL: audioURL, prompt: Transcriber.sanitizedPrompt(self.lastTranscription))
+                let mode = self.config.proofreadingMode ?? .standard
+                let text = mode == .standard
+                    ? TextPostProcessor.process(raw, language: self.config.language)
+                    : raw
                 if maxRecordings > 0 {
                     RecordingStore.prune(maxCount: maxRecordings)
                 }
                 DispatchQueue.main.async {
                     if !text.isEmpty {
-                        self.lastTranscription = text
                         self.inserter.insert(text: text)
+                        self.lastTranscription = text
+                    } else {
+                        self.lastTranscription = nil
                     }
                     self.statusBar.state = .idle
                     self.statusBar.buildMenu()
@@ -306,8 +309,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             do {
-                let raw = try self.transcriber.transcribe(audioURL: audioURL)
-                let text = (self.config.spokenPunctuation?.value ?? false) ? TextPostProcessor.process(raw) : raw
+                let raw = try self.transcriber.transcribe(audioURL: audioURL, prompt: Transcriber.sanitizedPrompt(self.lastTranscription))
+                let mode = self.config.proofreadingMode ?? .standard
+                let text = mode == .standard
+                    ? TextPostProcessor.process(raw, language: self.config.language)
+                    : raw
                 DispatchQueue.main.async {
                     if !text.isEmpty {
                         self.lastTranscription = text
@@ -320,6 +326,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                             self.statusBar.buildMenu()
                         }
                     } else {
+                        self.lastTranscription = nil
                         self.statusBar.state = .idle
                     }
                 }

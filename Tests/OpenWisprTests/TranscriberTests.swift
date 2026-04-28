@@ -50,4 +50,15 @@ final class TranscriberTests: XCTestCase {
     func testKnownMarkerStrippedUnknownPreserved() {
         XCTAssertEqual(Transcriber.stripWhisperMarkers("[BLANK_AUDIO] see [1]"), "see [1]")
     }
+
+    func testSanitizedPromptTrimsAndBoundsPrompt() {
+        let prompt = String(repeating: "a", count: 250)
+        let sanitized = Transcriber.sanitizedPrompt(prompt)
+        XCTAssertEqual(sanitized?.count, 200)
+        XCTAssertEqual(sanitized, String(repeating: "a", count: 200))
+    }
+
+    func testSanitizedPromptReturnsNilForMarkersOnly() {
+        XCTAssertNil(Transcriber.sanitizedPrompt(" [BLANK_AUDIO] "))
+    }
 }

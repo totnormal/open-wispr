@@ -1,16 +1,17 @@
 import Foundation
 
 public class Transcriber {
+    private static let maxPromptCharacters = 200
+
     private let modelSize: String
     private let language: String
-    public var spokenPunctuation: Bool = false
 
     public init(modelSize: String = "base.en", language: String = "en") {
         self.modelSize = modelSize
         self.language = language
     }
 
-    public func transcribe(audioURL: URL) throws -> String {
+    public func transcribe(audioURL: URL, prompt: String? = nil) throws -> String {
         guard let whisperPath = Transcriber.findWhisperBinary() else {
             throw TranscriberError.whisperNotFound
         }
@@ -27,9 +28,11 @@ public class Transcriber {
             "-l", language,
             "--no-timestamps",
             "-nt",
+            "--suppress-blank",
+            "--entropy-thold", "2.4",
         ]
-        if spokenPunctuation {
-            args += ["--suppress-regex", "[,\\.\\?!;:\\-—]"]
+        if let prompt = Transcriber.sanitizedPrompt(prompt), !prompt.isEmpty {
+            args += ["--prompt", prompt]
         }
         process.arguments = args
 
@@ -85,14 +88,26 @@ public class Transcriber {
         for match in matches.reversed() {
             let innerRange = match.range(at: 1)
             let inner = nsText.substring(with: innerRange)
-            if knownMarkers.contains(inner) {
-                let fullRange = Range(match.range, in: result)!
+            if knownMarkers.contains(inner), let fullRange = Range(match.range, in: result) {
                 result.replaceSubrange(fullRange, with: "")
             }
         }
         return result
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    public static func sanitizedPrompt(_ prompt: String?) -> String? {
+        guard let prompt else { return nil }
+        let cleaned = stripWhisperMarkers(prompt)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return nil }
+        if cleaned.count <= maxPromptCharacters {
+            return cleaned
+        }
+        let start = cleaned.index(cleaned.endIndex, offsetBy: -maxPromptCharacters)
+        return String(cleaned[start...]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     public static func findWhisperBinary() -> String? {
