@@ -24,7 +24,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try setupInner()
         } catch {
-            print("Fatal setup error: \(error.localizedDescription)")
+            let msg = error.localizedDescription
+            print("Fatal setup error: \(msg)")
+            DispatchQueue.main.async { [weak self] in
+                self?.statusBar.state = .error(msg)
+                self?.statusBar.buildMenu()
+            }
         }
     }
 
@@ -152,6 +157,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         let wasDownloading: Bool
         if case .downloading = statusBar.state { wasDownloading = true } else { wasDownloading = false }
         let deviceChanged = recorder.preferredDeviceID != newConfig.audioInputDeviceID
+        let oldModelSize = config.modelSize
+        let oldLanguage = config.language
         config = newConfig
         recorder.preferredDeviceID = config.audioInputDeviceID
         if deviceChanged {
@@ -188,8 +195,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 } catch {
                     DispatchQueue.main.async {
                         print("Error downloading model: \(error.localizedDescription)")
-                        self?.statusBar.state = .idle
+                        // Revert to the old model that we know works
+                        self?.config.modelSize = oldModelSize
+                        self?.config.language = oldLanguage
+                        try? self?.config.save()
+                        self?.transcriber = Transcriber(modelSize: oldModelSize, language: oldLanguage)
+                        self?.statusBar.state = .error("Failed to download \(newConfig.modelSize) — reverted to \(oldModelSize)")
                         self?.statusBar.updateDownloadProgress(nil)
+                        self?.statusBar.buildMenu()
                     }
                 }
             }

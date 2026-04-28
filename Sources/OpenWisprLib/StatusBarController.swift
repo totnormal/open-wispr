@@ -141,13 +141,13 @@ class StatusBarController: NSObject {
                 var cfg = Config.load()
                 cfg.language = lang.code
                 if lang.code != "en" && cfg.modelSize.hasSuffix(".en") {
-                    let base = String(cfg.modelSize.dropLast(3))
-                    if Config.supportedModels.contains(base) {
-                        cfg.modelSize = base
+                    let multilingual = String(cfg.modelSize.dropLast(3))
+                    if Config.supportedModels.contains(multilingual) && Transcriber.modelExists(modelSize: multilingual) {
+                        cfg.modelSize = multilingual
                     }
                 } else if lang.code == "en" && !cfg.modelSize.hasSuffix(".en") {
                     let enVariant = cfg.modelSize + ".en"
-                    if Config.supportedModels.contains(enVariant) {
+                    if Config.supportedModels.contains(enVariant) && Transcriber.modelExists(modelSize: enVariant) {
                         cfg.modelSize = enVariant
                     }
                 }
