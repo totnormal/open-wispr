@@ -28,8 +28,6 @@ public class Transcriber {
             "-l", language,
             "--no-timestamps",
             "-nt",
-            "--suppress-blank",
-            "--entropy-thold", "2.4",
         ]
         if let prompt = Transcriber.sanitizedPrompt(prompt), !prompt.isEmpty {
             args += ["--prompt", prompt]

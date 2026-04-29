@@ -121,6 +121,9 @@ class AudioRecorder {
         currentOutputURL = nil
 
         audioEngine?.inputNode.removeTap(onBus: 0)
+        audioEngine?.stop()
+        audioEngine = nil
+        inputFormat = nil
 
         return url
     }
